@@ -1,6 +1,6 @@
 {
   "name": "dsh-starpost",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "把「星邮」（Cortico World 扩展 cortico-world-starpost）接进 DeepSeek Harness：17 个工具、外部事件合批注入、系统提示词注入",
   "type": "module",
   "main": "./index.js",
@@ -39,13 +39,13 @@
     "chat"
   ],
   "license": "MIT",
-  "author": "18586454213-ai",
+  "author": "moon-lzy",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/18586454213-ai/dsh-starpost.git"
+    "url": "git+https://github.com/moon-lzy/dsh-starpost.git"
   },
-  "homepage": "https://github.com/18586454213-ai/dsh-starpost#readme",
+  "homepage": "https://github.com/moon-lzy/dsh-starpost#readme",
   "bugs": {
-    "url": "https://github.com/18586454213-ai/dsh-starpost/issues"
+    "url": "https://github.com/moon-lzy/dsh-starpost/issues"
   }
 }

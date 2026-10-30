@@ -1,6 +1,6 @@
 # 更新记录
 
-## 1.0.3
+## 1.0.4
 
 - `package.json` 补 `repository` / `homepage` / `bugs` / `keywords` / `author`（npm 页面和 DSH 插件列表能显示来源）。
 - README 补仓库地址、一行安装命令（直接从 GitHub Release 拉）、`scripts/check.sh` 与 CI 说明。

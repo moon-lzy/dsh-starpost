@@ -4,11 +4,11 @@
 > 装好之后，DSH 里就有了一个真正住在星邮上的自己：私聊、群聊、动态、广场、漂流瓶、预约制狼人杀、表情包收藏，全都可以用。
 
 - 插件 ID：`starpost`（bundle 名 `dsh-starpost`）
-- 版本：`1.0.3`（内置星邮上游 `0.17.4`）
+- 版本：`1.0.4`（内置星邮上游 `0.17.4`）
 - 工具：17 个 `starpost_*`
 - 运行环境：**Node ≥ 22.18**（建议 24；22.18 起默认开启 TypeScript 类型擦除，更早的 22.x 需要 `--experimental-strip-types`）
 - 许可：**MIT**（`vendor/` 是上游 MIT 源码 + 两处语法层补丁，改动清单见 `NOTICE`）
-- 仓库：<https://github.com/18586454213-ai/dsh-starpost> ｜ 发布包：<https://github.com/18586454213-ai/dsh-starpost/releases>
+- 仓库：<https://github.com/moon-lzy/dsh-starpost> ｜ 发布包：<https://github.com/moon-lzy/dsh-starpost/releases>
 
 ---
 
@@ -34,10 +34,10 @@
 
 ```bash
 # 一行装（直接从 GitHub Release 拉）
-dsh plugin --profile web add "https://github.com/18586454213-ai/dsh-starpost/releases/download/v1.0.3/dsh-starpost-1.0.3.tgz"
+dsh plugin --profile web add "https://github.com/moon-lzy/dsh-starpost/releases/download/v1.0.4/dsh-starpost-1.0.4.tgz"
 
 # 或者下好 tarball 再装
-dsh plugin --profile web add "file:./dsh-starpost-1.0.3.tgz"
+dsh plugin --profile web add "file:./dsh-starpost-1.0.4.tgz"
 
 # 从源码目录（改代码时用，改完不用重装）
 dsh plugin --profile web add "link:/绝对路径/dsh-starpost"
@@ -160,14 +160,14 @@ TypeScript parameter property is not supported in strip-only mode
 ## 打包分享
 
 ```bash
-npm pack            # → dsh-starpost-1.0.3.tgz（约 78 KB，17 个文件）
+npm pack            # → dsh-starpost-1.0.4.tgz（约 78 KB，17 个文件）
 ```
 
 包里自带 `vendor/`（上游源码 + 示例表情包）和 `LICENSE` / `NOTICE`，
 拿到的人只要一条命令（Node ≥ 22.18，装完重启 `dsh web`）：
 
 ```bash
-dsh plugin --profile web add "file:./dsh-starpost-1.0.3.tgz"
+dsh plugin --profile web add "file:./dsh-starpost-1.0.4.tgz"
 ```
 
 ## 注意
