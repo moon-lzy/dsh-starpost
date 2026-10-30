@@ -1,5 +1,11 @@
 # 更新记录
 
+## 1.2.1
+
+- 新增**致谢**（`README.md` 与 `NOTICE`）：hth768 的星邮上游、Coopanion / Cortico 团队的扩展契约与面板范本、
+  DeepSeek Harness 的插件体系与 `createUserMessage`、以及 dsh-qq-bridge / dsh-meme 的 client bundle 写法参考。
+- 文档：安装示例里的文件名统一到当前版本，`releases/latest/download/…` 一行装不再写死版本号。
+
 ## 1.2.0
 
 - **设置页照 Coo 里星邮那套面板重做**，从单页扩成 8 个标签：总览 / 聊天 / 动态 / 广场 / 漂流瓶 / 表情包 / 狼人杀 / 设置。

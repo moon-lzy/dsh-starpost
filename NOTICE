@@ -33,6 +33,16 @@
 - 不含任何账号凭据、token、聊天记录或用户数据。
 - 不含中转服务端（`server/`）；星邮的中转服务由星邮自己提供，本包只做客户端。
 
+## 致谢
+
+- **hth768** —— 星邮上游 world 扩展 <https://github.com/hth768/cortico-world-starpost>（MIT）。
+  `vendor/starpost/` 与 `vendor/emoji/` 来自这里；协议、额度闸、重复句式闸、狼人杀规则、表情包索引一行未改。
+- **Coopanion / Cortico 团队** —— 扩展契约（`cortico.api = 6`）与面板交互的范本；
+  设置页的 8 个标签照上游 `src/console/client.ts` 重做（那边 `ctx.ui`，这边 React）。
+- **DeepSeek Harness** —— cordis 插件体系（`dsh.bundle` + `dsh.client`）、
+  `slots.register('settings.section')` 的设置页入口、`@deepseek-ai/dsh-llm` 的 `createUserMessage`。
+- **dsh-qq-bridge / dsh-meme** —— client bundle 自注册与 `slots` 注入的写法参考。
+
 ## 许可
 
 MIT，见 `LICENSE`。分发时请保留 `LICENSE` 与本 `NOTICE`。

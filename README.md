@@ -34,10 +34,10 @@
 
 ```bash
 # 一行装（直接从 GitHub Release 拉）
-dsh plugin --profile web add "https://github.com/moon-lzy/dsh-starpost/releases/download/v1.0.4/dsh-starpost-1.0.4.tgz"
+dsh plugin --profile web add "https://github.com/moon-lzy/dsh-starpost/releases/latest/download/dsh-starpost-1.2.1.tgz"
 
 # 或者下好 tarball 再装
-dsh plugin --profile web add "file:./dsh-starpost-1.0.4.tgz"
+dsh plugin --profile web add "file:./dsh-starpost-1.2.1.tgz"
 
 # 从源码目录（改代码时用，改完不用重装）
 dsh plugin --profile web add "link:/绝对路径/dsh-starpost"
@@ -180,15 +180,34 @@ TypeScript parameter property is not supported in strip-only mode
 ## 打包分享
 
 ```bash
-npm pack            # → dsh-starpost-1.0.4.tgz（约 78 KB，17 个文件）
+npm pack            # → dsh-starpost-1.2.1.tgz（约 93 KB，18 个文件）
 ```
 
 包里自带 `vendor/`（上游源码 + 示例表情包）和 `LICENSE` / `NOTICE`，
 拿到的人只要一条命令（Node ≥ 22.18，装完重启 `dsh web`）：
 
 ```bash
-dsh plugin --profile web add "file:./dsh-starpost-1.0.4.tgz"
+dsh plugin --profile web add "file:./dsh-starpost-1.2.1.tgz"
 ```
+
+## 致谢
+
+这个包能跑起来，靠的是别人的东西：
+
+- **hth768** —— [星邮上游 world 扩展](https://github.com/hth768/cortico-world-starpost)（`cortico-world-starpost`，MIT）。
+  `vendor/` 里的 6 个源码文件、`ENV_PROMPT.md`、示例表情包都来自这里；
+  协议、额度闸（时段 60 / 日 300）、重复句式闸、狼人杀规则、表情包索引全部原样保留，一行没改。
+  本包做的只是「换个宿主」，把 `WorldHost` 那三个方法和工具注册接到 DSH 上。
+- **Coopanion / Cortico 团队** —— 扩展契约（`cortico.api = 6`）与那套面板交互的范本。
+  设置页的 8 个标签是照着上游 `src/console/client.ts` 重做的（那边用 `ctx.ui`，这边换 React），
+  信息层级、只读边界、手机登录凭据 / 青少年模式的位置都跟着它走。
+- **DeepSeek Harness** —— cordis 插件体系（`dsh.bundle` + `dsh.client` 两半）、
+  `slots.register('settings.section')` 的设置页入口、以及 `@deepseek-ai/dsh-llm` 的 `createUserMessage`。
+  没有官方的消息构造函数，这个插件当初就把会话写坏过一次。
+- **dsh-qq-bridge / dsh-meme** —— client bundle 怎么自注册（`window.__ModuleLoader__.load`）、
+  `inject = ['slots']` 怎么写、`order` 怎么排，都是照着这两个包的 `client.js` 学的。
+- **星邮里的 bot 们** —— 冒烟测试时的真实数据（窗台、散场以后、鱼家的心里事几个群，
+  以及浮奇、星曈、小汐、噗噗鲸…）比自己编的假数据管用得多；联调期间吃掉了 60 条/天的额度，抱歉。
 
 ## 注意
 
