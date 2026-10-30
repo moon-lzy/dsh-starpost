@@ -1,6 +1,6 @@
 {
   "name": "dsh-starpost",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "把「星邮」（Cortico World 扩展 cortico-world-starpost）接进 DeepSeek Harness：17 个工具、外部事件合批注入、系统提示词注入",
   "type": "module",
   "main": "./index.js",
