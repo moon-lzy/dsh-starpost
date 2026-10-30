@@ -70,6 +70,25 @@ function readConfig() {
   }
 }
 
+/** 设置页能改的字段；额度档位、防刷屏闸这些仍然手改文件。 */
+const CONFIG_WRITABLE = new Set([
+  'enabled', 'serverUrl', 'session', '会话', 'deliveryIntervalMs', '单批上限', 'pollIntervalMs', '自动唤醒', 'receiveMode',
+])
+
+/** 写回配置文件：只接受白名单字段，保留文件里其它已有键。 */
+function writeConfig(patch) {
+  let current = {}
+  try { current = JSON.parse(readFileSync(CONFIG_FILE, 'utf8')) } catch {}
+  const next = { ...current }
+  for (const [key, value] of Object.entries(patch ?? {})) {
+    if (!CONFIG_WRITABLE.has(key)) continue
+    if (value === undefined || value === null) continue
+    next[key === 'session' ? '会话' : key] = value
+  }
+  writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), { mode: 0o600 })
+  return next
+}
+
 /** 官方工厂：手搓的消息没有 id，会把会话日志写坏（踩过，会话直接打不开）。 */
 async function messageFactory() {
   const profile = process.env.DSH_PROFILE_DIR || join(HOME, '.dsh', 'profiles', 'web')
@@ -328,6 +347,9 @@ export function apply(ctx) {
         cursor,
         lamps: panelOf().lamps,
         bridge: bridge.state,
+        deliveryIntervalMs: cfg.deliveryIntervalMs,
+        batchLimit: cfg.单批上限,
+        autoWake: cfg.自动唤醒,
         tools: world.tools().map((t) => t.name),
       })
     })
@@ -335,6 +357,40 @@ export function apply(ctx) {
     route('/dsh-starpost/panel', async (req, res) => {
       const body = await readBody(req)
       const result = await panelOf().invoke(body.panel || 'viewer', body.method, body.args || [])
+      send(res, { ok: true, result })
+    })
+
+    /** 设置页保存：写文件 + 对能热改的字段立即生效（cfg 是活对象，各处每次现读）。 */
+    route('/dsh-starpost/config', async (req, res) => {
+      if (req.method !== 'POST') return send(res, { ok: false, error: '请用 POST' }, 405)
+      const body = await readBody(req)
+      const before = { ...cfg }
+      const next = writeConfig(body)
+      const restartKeys = []
+      for (const key of CONFIG_WRITABLE) {
+        const target = key === 'session' ? '会话' : key
+        const value = next[target]
+        if (value === undefined || value === before[target]) continue
+        if (key === 'enabled' || key === 'serverUrl' || key === 'receiveMode' || key === 'pollIntervalMs') restartKeys.push(target)
+        cfg[target] = value
+      }
+      log('配置已更新：', Object.keys(body ?? {}).join(',') || '(空)')
+      send(res, { ok: true, restartRequired: restartKeys.length > 0, restartKeys, config: {
+        enabled: cfg.enabled, serverUrl: cfg.serverUrl, session: cfg.会话,
+        deliveryIntervalMs: cfg.deliveryIntervalMs, 单批上限: cfg.单批上限, 自动唤醒: cfg.自动唤醒,
+      } })
+    })
+
+    /** 设置页读数据用：只放只读工具，防止 UI 误发消息烧额度。 */
+    const TOOL_READONLY = new Set(['starpost_read', 'starpost_history', 'starpost_sticker_stats', 'starpost_sticker_view'])
+    route('/dsh-starpost/tool', async (req, res) => {
+      if (req.method !== 'POST') return send(res, { ok: false, error: '请用 POST' }, 405)
+      const body = await readBody(req)
+      const name = String(body.name || '')
+      if (!TOOL_READONLY.has(name)) return send(res, { ok: false, error: `只允许只读工具：${[...TOOL_READONLY].join(', ')}` }, 400)
+      const decl = world.tools().find((t) => t.name === name)
+      if (!decl) return send(res, { ok: false, error: '没有这个工具' }, 404)
+      const result = await decl.handler(body.args ?? {})
       send(res, { ok: true, result })
     })
 

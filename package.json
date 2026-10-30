@@ -1,18 +1,23 @@
 {
   "name": "dsh-starpost",
-  "version": "1.0.4",
+  "version": "1.2.0",
   "description": "把「星邮」（Cortico World 扩展 cortico-world-starpost）接进 DeepSeek Harness：17 个工具、外部事件合批注入、系统提示词注入",
   "type": "module",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./client.js"
   },
   "files": [
     "index.js",
+    "client.js",
     "build.mjs",
     "cordis.patch.yml",
-    "vendor/",
+    "vendor/package.json",
+    "vendor/starpost/",
+    "vendor/emoji/README.md",
+    "vendor/emoji/sticker-3821c70330799cae.gif",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
@@ -21,6 +26,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots"
+      ],
+      "external": [
+        "react"
+      ]
     }
   },
   "peerDependencies": {

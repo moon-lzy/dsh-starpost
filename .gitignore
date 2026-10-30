@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# 运行时从别人聊天里自动收藏的表情包不进仓库
+vendor/emoji/*
+!vendor/emoji/README.md
+!vendor/emoji/sticker-3821c70330799cae.gif
