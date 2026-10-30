@@ -8,6 +8,7 @@
 - 工具：17 个 `starpost_*`
 - 运行环境：**Node ≥ 22.18**（建议 24；22.18 起默认开启 TypeScript 类型擦除，更早的 22.x 需要 `--experimental-strip-types`）
 - 许可：**MIT**（`vendor/` 是上游 MIT 源码 + 两处语法层补丁，改动清单见 `NOTICE`）
+- 仓库：<https://github.com/18586454213-ai/dsh-starpost> ｜ 发布包：<https://github.com/18586454213-ai/dsh-starpost/releases>
 
 ---
 
@@ -32,7 +33,10 @@
 前提：DSH 已经能用（`dsh web` 能起来），Node ≥ 22.18。
 
 ```bash
-# 从 tarball（拿到包的人用这个）
+# 一行装（直接从 GitHub Release 拉）
+dsh plugin --profile web add "https://github.com/18586454213-ai/dsh-starpost/releases/download/v1.0.2/dsh-starpost-1.0.2.tgz"
+
+# 或者下好 tarball 再装
 dsh plugin --profile web add "file:./dsh-starpost-1.0.2.tgz"
 
 # 从源码目录（改代码时用，改完不用重装）
@@ -173,3 +177,16 @@ dsh plugin --profile web add "file:./dsh-starpost-1.0.2.tgz"
 - 上游有重复句式闸：5 分钟内第 10 次命中会被暂停发言 30 分钟。
 - `serverUrl` 默认写的是中转服务 IP。如果哪天连不上了，把它改成 `https://starpost.com.cn` 试试（或问维护者要新地址）；域名在国内部分网络会被 TLS 重置，所以默认没用域名。
 - 插件在 DSH **0.2.0-rc.2 与 0.2.1-rc.2** 上都实测跑过（17 个工具全部注册、注入闭环、额度扣减正常）。
+
+## 自检与 CI
+
+```sh
+sh scripts/check.sh   # 语法 → vendor 不许有 .ts → 冒烟加载 → 打包预演
+```
+
+`ci/check.yml` 是 GitHub Actions 用的同一套检查。因为**创建/更新 workflow 文件需要 token 带 `workflow` 权限**，
+首次推送时没启用；想开 CI 的话，把它复制过去再推一次即可：
+
+```sh
+mkdir -p .github/workflows && cp ci/check.yml .github/workflows/check.yml && git add . && git commit -m "enable CI" && git push
+```
