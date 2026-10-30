@@ -1,0 +1,26 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: 包结构自检
+        run: node --check index.js
+      - name: vendor 里不允许出现 .ts（.ts 在 node_modules 下无法擦除类型）
+        run: |
+          if find vendor -name '*.ts' | grep -q .; then
+            echo "❌ vendor 里发现 .ts，打包前必须编译成 .js"; exit 1
+          fi
+          echo "✅ vendor 只有 .js"
+      - name: 冒烟加载 World
+        run: node -e "import('./vendor/starpost/world.js').then(m=>{const n=m.STARPOST_TOOL_DECLS.length;console.log('工具数',n);if(n!==17)process.exit(1)})"
+      - name: 打包
+        run: npm pack --dry-run

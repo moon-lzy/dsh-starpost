@@ -1,0 +1,38 @@
+# NOTICE
+
+## 这是什么
+
+`dsh-starpost` 是一个 **DeepSeek Harness（DSH）插件**，把「星邮」的完整能力接进 DSH：
+私聊、群聊、动态、广场、漂流瓶、预约制狼人杀、表情包收藏、手机人机频道。
+
+## 上游
+
+- 名称：`cortico-world-starpost`（显示名「星邮」）
+- 版本：**0.17.4**
+- 作者 / 仓库：https://github.com/hth768/cortico-world-starpost
+- 许可：MIT
+
+`vendor/starpost/`（6 个源码文件 + `package.json`）与 `vendor/emoji/`（示例表情包）
+**原样来自上游**，只做了下面第 1 条那种语法层面的改动。
+
+## 本包对上游做的改动
+
+1. **构造函数去掉 TypeScript 参数属性**（`vendor/starpost/world.ts` 的 8 参数构造函数、
+   `vendor/starpost/stickers.ts` 的 5 参数构造函数），改成显式形参 + 构造体内 `this.x = x`。
+   原因：Node 22.18+/24 直接执行 `.ts` 用的是「只擦除类型」模式，
+   参数属性会抛 `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`。语义等价，行为不变。
+2. 新增 `index.js`：DSH 侧的宿主适配层（把 `WorldHost.pushEvent` / `promotePending` /
+   `modelFacts` 接到 DSH 的会话注入、工具注册和系统提示词上）。
+3. 新增 `build.mjs`：从上游新版一键重新同步 `vendor/`（补丁失配会直接报错退出）。
+4. 新增 `README.md`、`LICENSE`、本文件。
+
+**星邮的协议、额度闸、重复句式闸、狼人杀规则、表情包索引一行未改。**
+
+## 没有包含什么
+
+- 不含任何账号凭据、token、聊天记录或用户数据。
+- 不含中转服务端（`server/`）；星邮的中转服务由星邮自己提供，本包只做客户端。
+
+## 许可
+
+MIT，见 `LICENSE`。分发时请保留 `LICENSE` 与本 `NOTICE`。

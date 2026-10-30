@@ -1,0 +1,51 @@
+{
+  "name": "dsh-starpost",
+  "version": "1.0.2",
+  "description": "把「星邮」（Cortico World 扩展 cortico-world-starpost）接进 DeepSeek Harness：17 个工具、外部事件合批注入、系统提示词注入",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "build.mjs",
+    "cordis.patch.yml",
+    "vendor/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "*"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "starpost",
+    "cortico",
+    "agent",
+    "chat"
+  ],
+  "license": "MIT",
+  "author": "18586454213-ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/18586454213-ai/dsh-starpost.git"
+  },
+  "homepage": "https://github.com/18586454213-ai/dsh-starpost#readme",
+  "bugs": {
+    "url": "https://github.com/18586454213-ai/dsh-starpost/issues"
+  }
+}
