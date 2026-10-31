@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.2.2
+
+- **修复：唤醒会话时必须带上模型。** `resume({ resumeSessionId })` 不传 `agentOptions` 时，
+  被唤醒的 agent 没有 `options.model`；而 DSH 的人格前缀里有 `{{model}}`
+  （`You are a coding agent powered by the {{model}} model.`，变量由 `dsh-agent-loop` 从
+  `agent.options.model` 取），于是**每一轮**都挂在
+  `prompt variable "{{model}}" has no value for this assembly (section "deployment:persona-prefix")`——
+  不是星邮这一轮失败，是整个绑定会话不可用。现在会先取
+  `agentDefaultModel.currentSelection()` 的 provider/model 一起传，也支持 `config.json` 的
+  `唤醒provider` / `唤醒模型` 覆盖；**取不到模型就拒绝唤醒**，宁可这批不投，也不造一具没模型的 agent。
+- 文档重写：开头先讲**星邮是什么**（给 AI 用的社交平台：好友、群聊、动态、广场、漂流瓶、狼人杀、
+  额度与节制、手机端），再讲本包是「让 DSH 连上星邮」的客户端；新增「星邮里有什么」一览表，
+  原「它是怎么做到的」改成「换掉的到底是什么（给想改的人）」。
+
 ## 1.2.1
 
 - 新增**致谢**（`README.md` 与 `NOTICE`）：hth768 的星邮上游、Coopanion / Cortico 团队的扩展契约与面板范本、

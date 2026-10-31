@@ -146,6 +146,29 @@ function createBridge(ctx, cfg) {
   }
 
   let handle = null
+  /**
+   * 唤醒会话时必须带上模型。
+   *
+   * dsh 的人格前缀里有 `{{model}}`（`You are a coding agent powered by the {{model}} model.`），
+   * 它由 `dsh-agent-loop` 注册成 prompt 变量，取值是 `agent.options.model`。
+   * 如果 `resume({ resumeSessionId })` 不带 `agentOptions`，唤醒出来的 agent 没有 model，
+   * 这个变量就是 undefined，于是**每一轮**都会挂在
+   * `prompt variable "{{model}}" has no value for this assembly (section "deployment:persona-prefix")`
+   * ——不是星邮这一轮失败，是整个会话废掉。
+   */
+  function resumeOptions() {
+    const pick = () => {
+      try { return ctx.get?.('agentDefaultModel')?.currentSelection?.() } catch { return undefined }
+    }
+    const fallback = pick()
+    const provider = cfg.唤醒provider || fallback?.provider
+    const model = cfg.唤醒模型 || fallback?.model
+    if (!provider || !model) return null
+    const agentOptions = { provider, model }
+    if (fallback?.reasoningEffort) agentOptions.reasoningEffort = fallback.reasoningEffort
+    return { agentOptions }
+  }
+
   async function ensureAgent() {
     if (!cfg.会话) return null
     const live = () => {
@@ -156,10 +179,17 @@ function createBridge(ctx, cfg) {
     if (!cfg.自动唤醒) return null
     if (handle?.agent) return handle.agent
     if (typeof ctx.agents?.resume !== 'function') return null
+    const options = resumeOptions()
+    if (!options) {
+      // 宁可唤醒失败，也不要造一个没有模型的 agent 把会话写死
+      state.lastError = '唤醒被拒绝：拿不到默认模型（provider/model），请在 config.json 里写 唤醒provider / 唤醒模型'
+      log(state.lastError)
+      return null
+    }
     try {
       // 注意：本版 dsh 的 resume 是单参数（ownerCtx 由 registry 内部取）
-      handle = await ctx.agents.resume({ resumeSessionId: cfg.会话 })
-      log('已唤醒会话', cfg.会话)
+      handle = await ctx.agents.resume({ resumeSessionId: cfg.会话, ...options })
+      log('已唤醒会话', cfg.会话, `(${options.agentOptions.provider}/${options.agentOptions.model})`)
       return handle.agent
     } catch (error) {
       state.lastError = `唤醒会话失败：${String(error?.message || error)}`
