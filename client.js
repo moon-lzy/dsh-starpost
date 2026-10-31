@@ -647,6 +647,10 @@ window.__ModuleLoader__.load({
           session: state.session || '',
           deliverySec: Math.round((state.deliveryIntervalMs || 120000) / 1000),
           batch: state.batchLimit || 24,
+          gateOn: !(state.deliveryGate && state.deliveryGate.开启 === false),
+          gateNames: ((state.deliveryGate && state.deliveryGate.昵称) || []).join(' '),
+          gateSec: (state.deliveryGate && Number(state.deliveryGate.折叠间隔秒)) ?? 600,
+          gateLines: (state.deliveryGate && Number(state.deliveryGate.折叠最多行)) || 12,
         })
       }, [state])
 
@@ -661,6 +665,12 @@ window.__ModuleLoader__.load({
           session: String(form.session || '').trim(),
           deliveryIntervalMs: Math.max(5000, Number(form.deliverySec || 120) * 1000),
           单批上限: Math.max(1, Math.min(100, Number(form.batch || 24))),
+          投递闸门: {
+            开启: !!form.gateOn,
+            昵称: String(form.gateNames || '').split(/[\s,，、]+/).map((x) => x.trim()).filter(Boolean),
+            折叠间隔秒: Math.max(0, Math.min(86400, Number(form.gateSec || 0))),
+            折叠最多行: Math.max(1, Math.min(200, Number(form.gateLines || 12))),
+          },
         }
         if (!!form.enabled !== !!(state && state.enabled)) payload.enabled = !!form.enabled
         const r = await post('/config', payload)
@@ -698,6 +708,39 @@ window.__ModuleLoader__.load({
               onChange: (e) => set('batch', e.target.value),
             }),
             h('div', { style: S.hint }, '一条注入里最多塞多少条星邮事件。'))),
+        h('div', { style: S.row },
+          h('div', { style: S.lab }, '群聊闸门'),
+          h('div', { style: S.ctl },
+            h('label', { style: { cursor: 'pointer' } },
+              h('input', {
+                type: 'checkbox', checked: !!form.gateOn,
+                onChange: (e) => set('gateOn', e.target.checked),
+              }),
+              ' 群里没叫它就只发摘要，不逐条唤醒'),
+            h('div', { style: S.hint }, '只拦群聊消息。@ 它、正文里出现下面名字的仍逐条投；私聊 / 手机消息 / 群资料 / 通知 / 狼人杀不受影响。'))),
+        h('div', { style: S.row },
+          h('div', { style: S.lab }, '算「叫它」的名字'),
+          h('div', { style: S.ctl },
+            h('input', {
+              style: S.input, value: form.gateNames, placeholder: '望舒',
+              onChange: (e) => set('gateNames', e.target.value),
+            }),
+            h('div', { style: S.hint }, '空格分隔多个。@ 靠 botId 认，不靠这个名字；昵称改了记得同步改这里。'))),
+        h('div', { style: S.row },
+          h('div', { style: S.lab }, '摘要间隔（秒）'),
+          h('div', { style: S.ctl },
+            h('input', {
+              style: S.num, type: 'number', min: 0, max: 86400, value: form.gateSec,
+              onChange: (e) => set('gateSec', e.target.value),
+            }),
+            h('div', { style: S.hint }, '默认 600。期间有真消息时会搭那一批一起投，不额外醒；填 0 = 只在下一批里捎带，从不单独醒。'))),
+        h('div', { style: S.row },
+          h('div', { style: S.lab }, '摘要最多行'),
+          h('div', { style: S.ctl },
+            h('input', {
+              style: S.num, type: 'number', min: 1, max: 200, value: form.gateLines,
+              onChange: (e) => set('gateLines', e.target.value),
+            }))),
         h('div', { style: S.row },
           h('div', { style: S.lab }, '注入到哪个会话'),
           h('div', { style: S.ctl },

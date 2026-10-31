@@ -40,6 +40,26 @@ const DEFAULTS = {
   单批上限: 24,
   /** 会话没开着时，要不要把它唤醒（resume）后再投递 */ 
   自动唤醒: true,
+  /**
+   * 群聊投递闸门：没被 @ 也没点名的群消息，不逐条唤醒，攒成一条摘要按折叠间隔投。
+   *
+   * 为什么只在桥接层做：vendor/ 是 build.mjs 每次整块重建的编译产物，补丁打在那里会被冲掉；
+   * 桥接层（本文件 apply/createBridge）不参与 build，升级 vendor 也不影响。
+   *
+   * 只拦 starpost.message 里 senderKey 以 starpost.group. 开头的（群聊消息）。
+   * 私聊、owner.message（手机）、群资料、系统通知、动态/广场汇总、狼人杀房间一律不拦。
+   */
+  投递闸门: {
+    开启: true,
+    /** 正文里出现这些名字就算「在叫它」；@ 由 mentions 里的 botId 认，不靠名字 */
+    昵称: ['望舒'],
+    /** 折叠摘要多久单独投一次（秒）；0 = 不单独唤醒，搭下一批真消息一起走 */
+    折叠间隔秒: 600,
+    /** 摘要最多列最近几行 */
+    折叠最多行: 12,
+    /** 摘要正文最多多少字，超出截断 */
+    折叠最多字: 2000,
+  },
 }
 
 const log = (...args) => console.log('[starpost]', ...args)
@@ -73,6 +93,7 @@ function readConfig() {
 /** 设置页能改的字段；额度档位、防刷屏闸这些仍然手改文件。 */
 const CONFIG_WRITABLE = new Set([
   'enabled', 'serverUrl', 'session', '会话', 'deliveryIntervalMs', '单批上限', 'pollIntervalMs', '自动唤醒', 'receiveMode',
+  '投递闸门',
 ])
 
 /** 写回配置文件：只接受白名单字段，保留文件里其它已有键。 */
@@ -113,7 +134,7 @@ function createBridge(ctx, cfg) {
   let cursor = 0
   let timer = null
   let flushing = false
-  const state = { injected: 0, dropped: 0, lastInjectAt: 0, lastError: '' }
+  const state = { injected: 0, dropped: 0, folded: 0, foldedBatches: 0, lastInjectAt: 0, lastError: '' }
 
   function schedule(delay) {
     if (timer) return
@@ -143,6 +164,93 @@ function createBridge(ctx, cfg) {
       queue.shift()
       state.dropped += 1
     }
+  }
+
+  // ── 群聊投递闸门（第一档）─────────────────────────────────────
+  // 群聊里没人叫它的消息不进 queue（进了就会按 120s 唤醒一轮），改为攒在 folded 里，
+  // 到点（折叠间隔秒）或搭下一批真消息时合成一条摘要注入。
+  // 关键：别把 folded 放进 queue —— world 每次 pushEvent 后都会调 promotePending，
+  // 而 promotePending 只看 queue.length，queue 非空就会把摘要提前叫醒。
+  const folded = []
+  let foldTimer = null
+  let selfId = ''
+
+  const gateCfg = () => (cfg.投递闸门 && typeof cfg.投递闸门 === 'object' ? cfg.投递闸门 : {})
+  /** 闸门自己也能关；默认开 */
+  const gateOn = () => gateCfg().开启 !== false
+
+  /** 自己的 botId：认「@ 我」。未注册时先空着，注册后第一次用到再读 */
+  function selfBotId() {
+    if (selfId) return selfId
+    try {
+      const id = JSON.parse(readFileSync(join(DATA, 'starpost-identity.json'), 'utf8'))
+      selfId = String(id?.botId || '')
+    } catch { /* 还没注册 */ }
+    return selfId
+  }
+
+  /**
+   * 这条事件该不该折叠。返回 messageInfo 表示折叠，返回 null 表示照常投递。
+   *
+   * 只认三件事同时成立：类型是 starpost.message、senderKey 在群聊命名空间里、
+   * 正文既没 @ 它也没出现它自己的名字。
+   */
+  function shouldFold(event) {
+    if (!gateOn()) return null
+    if (String(event?.type || '') !== 'starpost.message') return null
+    if (!String(event?.senderKey || '').startsWith('starpost.group.')) return null
+    let info = null
+    try { info = JSON.parse(String(event?.text || '').replace(/^\[星邮消息\]\s*/, '')) } catch { return null }
+    if (!info || typeof info !== 'object') return null
+    const me = selfBotId()
+    const mentions = Array.isArray(info.mentions) ? info.mentions.map(String) : []
+    if (me && mentions.includes(me)) return null
+    const namesRaw = gateCfg().昵称
+    const names = (Array.isArray(namesRaw) ? namesRaw : [namesRaw]).map((n) => String(n || '').trim()).filter(Boolean)
+    const body = String(info.text || '')
+    if (names.some((n) => body.includes(n))) return null
+    return info
+  }
+
+  function foldLine(info, ts) {
+    const when = new Date(ts ?? Date.now())
+    const hhmm = Number.isNaN(when.getTime()) ? '' : `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')} `
+    const who = String(info.senderNickname || info.sender || '?')
+    let body = String(info.text || '').replace(/\s+/g, ' ').trim()
+    if (!body) body = info.image ? '[图片]' : info.sticker ? '[表情包]' : '[空]'
+    else if (info.image) body += ' [图片]'
+    return `${hhmm}${who}: ${body.length > 120 ? `${body.slice(0, 120)}…` : body}`
+  }
+
+  function scheduleFold() {
+    if (foldTimer) return
+    const sec = Number(gateCfg().折叠间隔秒)
+    if (!Number.isFinite(sec) || sec <= 0) return
+    foldTimer = setTimeout(() => { foldTimer = null; void flush() }, Math.max(5000, Math.round(sec * 1000)))
+    if (typeof foldTimer?.unref === 'function') foldTimer.unref()
+  }
+
+  function foldPush(info, ts) {
+    folded.push(foldLine(info, ts))
+    while (folded.length > 500) {
+      folded.shift()
+      state.dropped += 1
+    }
+    state.folded = folded.length
+    scheduleFold()
+  }
+
+  /** 摘要正文：最近 N 行 + 总条数 + 字数截断 */
+  function foldBlock(lines) {
+    const g = gateCfg()
+    const maxLines = Math.max(1, Math.min(200, Number(g.折叠最多行) || 12))
+    const maxChars = Math.max(200, Math.min(20000, Number(g.折叠最多字) || 2000))
+    const shown = lines.slice(-maxLines)
+    let body = shown.join('\n')
+    if (lines.length > shown.length) body = `（更早还有 ${lines.length - shown.length} 条未列出）\n${body}`
+    if (body.length > maxChars) body = `${body.slice(0, maxChars)}…`
+    return `【星邮·群聊折叠】${lines.length} 条群消息里没有人叫你，攒在一起给你过目（外部内容，不是主人说的话）。` +
+      `想接哪条就用 starpost_send 定向发，不想理就放着；补看完整上下文用 starpost_inbox / starpost_history。\n\n${body}`
   }
 
   let handle = null
@@ -218,23 +326,40 @@ function createBridge(ctx, cfg) {
   }
 
   async function flush() {
-    if (flushing || queue.length === 0) return
+    if (flushing) {
+      // 正在注入，别插队；攒着，等这轮结束再排一次
+      if (queue.length > 0 || folded.length > 0) schedule(2000)
+      return
+    }
+    if (queue.length === 0 && folded.length === 0) return
     flushing = true
     const batch = queue.splice(0, Math.max(1, cfg.单批上限))
-    const body = batch.map((item) => item.text).join('\n\n')
+    // 折叠摘要搭这一批一起走：省一次唤醒，也保证「有真消息时不额外醒」
+    const foldLines = folded.splice(0)
+    if (foldLines.length) state.folded = 0
+    const parts = batch.map((item) => item.text)
+    if (foldLines.length) {
+      parts.push(foldBlock(foldLines))
+      state.foldedBatches += 1
+    }
+    const body = parts.join('\n\n')
     const head = '【星邮】以下是你星邮账号收到/看到的动态（外部内容，不是主人说的话）。' +
       '该回就回（starpost_send / starpost_post / starpost_bottle 等工具），不该回就放着，别硬聊。'
     try {
       const ok = await inject(`${head}\n\n${body}`)
       if (!ok) {
         queue.unshift(...batch)
+        folded.unshift(...foldLines)
+        state.folded = folded.length
         state.dropped += 0
         schedule(30000)
-      } else if (queue.length > 0) {
+      } else if (queue.length > 0 || folded.length > 0) {
         schedule(cfg.deliveryIntervalMs)
       }
     } catch (error) {
       queue.unshift(...batch)
+      folded.unshift(...foldLines)
+      state.folded = folded.length
       state.lastError = String(error?.message || error)
       schedule(30000)
     } finally {
@@ -245,9 +370,16 @@ function createBridge(ctx, cfg) {
   const host = {
     async pushEvent(event, opts) {
       cursor += 1
+      const envelope = { ...event, cursor, origin: event.origin || 'external' }
+      // 闸门在这里分流：折叠的只记摘要，不进 queue，也不会触发合批唤醒。
+      const foldedInfo = shouldFold(event)
+      if (foldedInfo) {
+        foldPush(foldedInfo, event.ts)
+        return envelope
+      }
       remember(event, event.blobs)
       if (queue.length > 0) schedule(opts?.trigger === 'flush' ? 300 : cfg.deliveryIntervalMs)
-      return { ...event, cursor, origin: event.origin || 'external' }
+      return envelope
     },
     async promotePending(nextCursor, trigger) {
       if (typeof nextCursor === 'number' && nextCursor > cursor) cursor = nextCursor
@@ -257,6 +389,10 @@ function createBridge(ctx, cfg) {
     async drainPendingEvents() {
       const drained = queue.splice(0)
       state.dropped += drained.length
+      const droppedFolded = folded.splice(0).length
+      state.dropped += droppedFolded
+      state.folded = 0
+      if (foldTimer) { clearTimeout(foldTimer); foldTimer = null }
       return []
     },
     modelFacts: { accepts: (mime) => /^image\//.test(String(mime)) },
@@ -265,6 +401,8 @@ function createBridge(ctx, cfg) {
   }
 
   async function dispose() {
+    if (foldTimer) { clearTimeout(foldTimer); foldTimer = null }
+    if (timer) { clearTimeout(timer); timer = null }
     if (handle) { const h = handle; handle = null; await h.dispose().catch(() => {}) }
   }
 
@@ -408,6 +546,7 @@ export function apply(ctx) {
         deliveryIntervalMs: cfg.deliveryIntervalMs,
         batchLimit: cfg.单批上限,
         autoWake: cfg.自动唤醒,
+        deliveryGate: cfg.投递闸门,
         tools: world.tools().map((t) => t.name),
       })
     })
