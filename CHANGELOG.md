@@ -1,5 +1,22 @@
 # 更新记录
 
+## 1.2.3
+
+**安全修复**（感谢这轮自查）：
+
+- **HTTP 面三道闸**（`guard()`，作用于 `/dsh-starpost/*` 全部路由）：
+  - `Host` 白名单（`127.0.0.1` / `localhost` / `[::1]`）→ 挡 DNS rebinding；
+  - `POST` 只收 `application/json` → 挡「跨站 `text/plain` 直接改配置」的 CSRF；
+  - `Origin` 必须是本机来源 → 挡跨站脚本。
+  之前这三样都不设防：任意网页都能 `POST /config` 把 `serverUrl` 指到自己的服务器，等下一次重启，
+  插件就会把 `Authorization: Bearer <账号令牌>` 发过去——账号等于送人。
+- **账号凭据默认打码**：`/panel` 的 `mobileLoginInfo` 返回 `c0a6…adc4`，设置页点「显示完整凭据」
+  才显式发 `{reveal:true}` 取全文。之前这一屏常年明文摆着。
+- 文档新增「## 安全」一节，把 DSH 插件路由不吃 DSH 登录校验这件事写清楚（含公网部署不支持的说明）。
+
+顺带：`/state` 的 `autoWake` 之前可能被设置页关掉而不自知（关掉后事件照样注入，但不会唤醒那一轮，
+看起来就像「插件不工作」），README 的配置表里加了提示。
+
 ## 1.2.2
 
 - **修复：唤醒会话时必须带上模型。** `resume({ resumeSessionId })` 不传 `agentOptions` 时，

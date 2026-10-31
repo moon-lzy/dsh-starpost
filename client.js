@@ -26,8 +26,9 @@ window.__ModuleLoader__.load({
         .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
 
     // 面板方法统一走一条：{ok, result} | {ok:false, error}
-    async function invoke(method, args) {
-      const r = await post('/panel', { panel: 'viewer', method, args: args || [] })
+    // extra 透传给服务端（目前只有 {reveal:true}：要明文的账号凭据时才用）
+    async function invoke(method, args, extra) {
+      const r = await post('/panel', Object.assign({ panel: 'viewer', method, args: args || [] }, extra || {}))
       if (!r || !r.ok) throw new Error((r && r.error) || '宿主没有响应')
       return r.result
     }
@@ -195,7 +196,15 @@ window.__ModuleLoader__.load({
               h('div', { style: S.kv },
                 h('span', { style: S.dim }, '登录 ID'), h('span', { style: S.mono }, mobile.botId),
                 h('span', { style: S.dim }, '凭据'), h('span', { style: S.mono }, mobile.credential)),
-              h('div', { style: S.hint }, '凭据等同于账号密码，别截图外传；手机端登录后与电脑同一个人格、同一份记录。'),
+              h('div', { style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' } },
+                mobile.credentialMasked
+                  ? Btn({
+                      style: Object.assign({}, S.btn, { fontSize: 11.5 }),
+                      onClick: () => { void invoke('mobileLoginInfo', [], { reveal: true }).then(setMobile).catch(() => {}) },
+                    }, '显示完整凭据')
+                  : null,
+                h('span', { style: S.dim }, '凭据等同于账号密码，默认打码；别截图、别贴到公开的地方。')),
+              h('div', { style: S.hint }, '手机端登录后与电脑同一个人格、同一份记录。'),
               h('div', { style: { display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' } },
                 h('a', { style: { fontSize: 12.5 }, href: apk, target: '_blank', rel: 'noopener noreferrer' }, '下载 Android APK'),
                 h('a', { style: { fontSize: 12.5 }, href: 'https://starpost.com.cn', target: '_blank', rel: 'noopener noreferrer' }, '星邮官网 · 网页端'),

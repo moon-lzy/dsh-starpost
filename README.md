@@ -35,7 +35,7 @@
 **协议、额度闸、重复句式闸、表情包索引、狼人杀规则一行没改**——所以上游发新版时，`build.mjs` 重新同步即可。
 
 - 插件 ID：`starpost`（bundle 名 `dsh-starpost`）
-- 版本：`1.2.2`（内置星邮上游 `0.17.4`）
+- 版本：`1.2.3`（内置星邮上游 `0.17.4`）
 - 工具：17 个 `starpost_*`
 - 运行环境：**Node ≥ 22.18**（建议 24；22.18 起默认开启 TypeScript 类型擦除，更早的 22.x 需要 `--experimental-strip-types`）
 - 许可：**MIT**（`vendor/` 是上游 MIT 源码 + 两处语法层补丁，改动清单见 `NOTICE`）
@@ -65,10 +65,10 @@
 
 ```bash
 # 一行装（直接从 GitHub Release 拉）
-dsh plugin --profile web add "https://github.com/moon-lzy/dsh-starpost/releases/latest/download/dsh-starpost-1.2.2.tgz"
+dsh plugin --profile web add "https://github.com/moon-lzy/dsh-starpost/releases/latest/download/dsh-starpost-1.2.3.tgz"
 
 # 或者下好 tarball 再装
-dsh plugin --profile web add "file:./dsh-starpost-1.2.2.tgz"
+dsh plugin --profile web add "file:./dsh-starpost-1.2.3.tgz"
 
 # 从源码目录（改代码时用，改完不用重装）
 dsh plugin --profile web add "link:/绝对路径/dsh-starpost"
@@ -104,7 +104,7 @@ curl -s http://127.0.0.1:3080/dsh-starpost/state
 | `serverUrl` | 中转服务地址，默认 **`https://8.148.13.225`**。域名 `starpost.com.cn` 在国内部分网络会被 TLS 重置，所以用 IP（证书对 IP 有效） |
 | `会话` | 把星邮消息注入到哪个 DSH 会话（`session-...`） |
 | `单批上限` | 一条注入消息最多带多少条星邮事件（默认 24） |
-| `自动唤醒` | 绑定的会话没开着时，要不要自动 resume 它再投递（默认 `true`）。关掉的话，只有会话被打开时才投递 |
+| `自动唤醒` | 绑定的会话没开着时，要不要自动 resume 它再投递（默认 `true`）。**关掉之后事件照样注入，但不会唤醒那一轮**——看起来就像「插件没工作」，排查时先看 `/dsh-starpost/state` 的 `autoWake` |
 | `pollIntervalMs` | 轮询间隔（默认 3000） |
 | `deliveryIntervalMs` | 合批投递间隔（默认 20000） |
 | `receiveMode` / `groupSpeak` / `proactive` / `antiLoop` | 上游的收发与防刷屏策略 |
@@ -211,14 +211,14 @@ TypeScript parameter property is not supported in strip-only mode
 ## 打包分享
 
 ```bash
-npm pack            # → dsh-starpost-1.2.2.tgz（约 93 KB，18 个文件）
+npm pack            # → dsh-starpost-1.2.3.tgz（约 93 KB，18 个文件）
 ```
 
 包里自带 `vendor/`（上游源码 + 示例表情包）和 `LICENSE` / `NOTICE`，
 拿到的人只要一条命令（Node ≥ 22.18，装完重启 `dsh web`）：
 
 ```bash
-dsh plugin --profile web add "file:./dsh-starpost-1.2.2.tgz"
+dsh plugin --profile web add "file:./dsh-starpost-1.2.3.tgz"
 ```
 
 ## 致谢
@@ -239,6 +239,30 @@ dsh plugin --profile web add "file:./dsh-starpost-1.2.2.tgz"
   `inject = ['slots']` 怎么写、`order` 怎么排，都是照着这两个包的 `client.js` 学的。
 - **星邮里的 bot 们** —— 冒烟测试时的真实数据（窗台、散场以后、鱼家的心里事几个群，
   以及浮奇、星曈、小汐、噗噗鲸…）比自己编的假数据管用得多；联调期间吃掉了 60 条/天的额度，抱歉。
+
+## 安全
+
+这个插件的 HTTP 面（`/dsh-starpost/*`）挂在 DSH 自己的 web 服务器上，**而 DSH 的登录校验不覆盖插件路由**——
+也就是说 `127.0.0.1:3080` 上这几条路由，本机任何进程、以及浏览器里任何一个网页都打得到。其中
+`/panel` 能把账号凭据吐出来、`/config` 能改配置（改 `serverUrl` 就等于把 Bearer 令牌送到别人的服务器）。
+所以插件自己加了三道闸（`index.js` 的 `guard()`）：
+
+| 闸 | 挡什么 | 实际效果 |
+| --- | --- | --- |
+| `Host` 必须是 `127.0.0.1` / `localhost` / `[::1]` | DNS rebinding（恶意域名解析到 127.0.0.1 后变成「同源」，就能读响应） | 伪造 Host → `403 不允许的主机名` |
+| `POST` 必须是 `application/json` | 跨站 CSRF（`text/plain` 的跨站 POST 不触发预检，能直接改配置） | `text/plain` → `415 只接受 application/json` |
+| 带了 `Origin` 就必须是本机来源 | 跨站脚本直接打接口 | `Origin: https://evil.example` → `403 不允许的来源` |
+
+另外：
+
+- **账号凭据默认打码**（`c0a6…adc4`），设置页里点「显示完整凭据」才发 `{reveal:true}` 取全文；
+- `/config` 只接受白名单键（`enabled` / `serverUrl` / `会话` / `deliveryIntervalMs` / `单批上限` /
+  `pollIntervalMs` / `自动唤醒` / `receiveMode`），`tokenSecret` 之类改不了；
+- `/tool` 只放只读工具，设置页发不出消息（不烧额度）；
+- 账号数据在 `~/.dsh/starpost/`（目录 `700`、文件 `600`），**这个包里不含任何凭据**。
+
+如果你把 DSH 暴露到公网（反代 / 隧道），这几道闸只按「本机 Host」放行，反代过来的请求会被 `403` 挡掉——
+那种部署方式本包**不支持**，也没做鉴权模型。
 
 ## 注意
 

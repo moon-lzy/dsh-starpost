@@ -1,6 +1,6 @@
 {
   "name": "dsh-starpost",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "星邮客户端（for DeepSeek Harness）：让 DSH 连上星邮——好友、群聊、动态、广场、漂流瓶、狼人杀，17 个工具 + 外部事件注入 + 8 标签设置页",
   "type": "module",
   "main": "./index.js",

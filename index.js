@@ -356,10 +356,38 @@ export function apply(ctx) {
       for await (const chunk of req) raw += chunk
       try { return raw ? JSON.parse(raw) : {} } catch { return {} }
     }
+    /**
+     * 这些路由挂在 DSH 自己的 web 服务器上，**不经过 DSH 的登录校验**——本机任何进程、
+     * 以及浏览器里任何一个网页都能打到 127.0.0.1:3080。其中 /panel 能把账号凭据吐出来、
+     * /config 能改配置（改 serverUrl 就能把 Bearer 令牌送到别人的服务器）。所以自己把关：
+     *   1) Host 必须是回环名 —— 挡 DNS rebinding（恶意域名解析到 127.0.0.1 后变成同源）；
+     *   2) POST 必须是 application/json —— 跨站带这个头会先发预检，我们不回 CORS 头，浏览器就发不出；
+     *   3) 带了 Origin 就必须是本机来源。
+     */
+    const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
+    const LOCAL_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/
+    const guard = (req, res) => {
+      const host = String(req.headers.host || '').replace(/:\d+$/, '')
+      if (!LOCAL_HOSTS.has(host)) {
+        log('拒绝非本机 Host 的请求：', host || '(空)')
+        return send(res, { ok: false, error: `不允许的主机名：${host || '(空)'}` }, 403), false
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        const ct = String(req.headers['content-type'] || '').toLowerCase()
+        if (!ct.startsWith('application/json')) return send(res, { ok: false, error: '只接受 application/json' }, 415), false
+        const origin = req.headers.origin
+        if (origin && !LOCAL_ORIGIN.test(origin)) {
+          log('拒绝跨站 Origin 的请求：', origin)
+          return send(res, { ok: false, error: `不允许的来源：${origin}` }, 403), false
+        }
+      }
+      return true
+    }
     const route = (path, handler) => ctx.effect(() => ctx.webServer.register({
       kind: 'exact',
       path,
       handler: async (req, res) => {
+        if (!guard(req, res)) return
         try { await handler(req, res) } catch (error) { send(res, { ok: false, error: String(error?.message || error) }, 500) }
       },
     }))
@@ -387,7 +415,14 @@ export function apply(ctx) {
     route('/dsh-starpost/panel', async (req, res) => {
       const body = await readBody(req)
       const result = await panelOf().invoke(body.panel || 'viewer', body.method, body.args || [])
-      send(res, { ok: true, result })
+      // 账号凭据默认打码：这一屏常年开在设置里，不该一直明文摆着。
+      // 要看全的，显式再发一次 {reveal:true}（设置页的「显示」按钮就是这么发的）。
+      let payload = result
+      if (body.method === 'mobileLoginInfo' && result && typeof result.credential === 'string' && body.reveal !== true) {
+        const c = result.credential
+        payload = { ...result, credential: c.length > 10 ? `${c.slice(0, 4)}…${c.slice(-4)}` : '…', credentialMasked: true }
+      }
+      send(res, { ok: true, result: payload })
     })
 
     /** 设置页保存：写文件 + 对能热改的字段立即生效（cfg 是活对象，各处每次现读）。 */
