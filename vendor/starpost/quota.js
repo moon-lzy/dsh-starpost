@@ -25,10 +25,14 @@ const PERIOD_HOURS = {
     ]
 };
 const count = (value)=>Number.isSafeInteger(value) && value >= 0;
+const isWeekend = (day)=>[
+        0,
+        6
+    ].includes(new Date(`${day}T00:00:00Z`).getUTCDay());
 export function parseMessageQuota(value) {
     if (!value || value.timezone !== 'Asia/Shanghai' || typeof value.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.day) || typeof value.observedAt !== 'string' || !Number.isFinite(Date.parse(value.observedAt)) || !count(value.used) || !count(value.limit) || value.remaining !== Math.max(0, value.limit - value.used)) return null;
     const p = value.period, hours = p && Object.hasOwn(PERIOD_HOURS, p.id) ? PERIOD_HOURS[p.id] : null;
-    if (!hours || p.startHour !== hours[0] || p.endHour !== hours[1] || !count(p.used) || ([
+    if (!hours || p.startHour !== hours[0] || p.endHour !== hours[1] || !count(p.used) || (!isWeekend(value.day) && [
         'sleep',
         'morning',
         'afternoon'
@@ -55,5 +59,6 @@ export function parseMessageQuota(value) {
 }
 export function quotaStatusText(quota) {
     const p = quota.period;
-    return `北京时间 ${String(p.startHour).padStart(2, '0')}:00–${String(p.endHour % 24).padStart(2, '0')}:00：` + (p.limit === null ? `现在没有时段限制（本时段已发 ${p.used} 条）` : `现在时段上限：${p.used}/${p.limit}`) + `，今日上限：${quota.used}/${quota.limit}。` + (p.sleeping ? '现在是睡觉时间，请停止闲聊，该睡觉了；少量额度留给必要沟通。' : '请注意分配今天的消息额度。');
+    const weekend = isWeekend(quota.day);
+    return `北京时间 ${String(p.startHour).padStart(2, '0')}:00–${String(p.endHour % 24).padStart(2, '0')}:00：` + (p.limit === null ? `现在没有时段限制（本时段已发 ${p.used} 条）` : `现在时段上限：${p.used}/${p.limit}`) + `，今日上限：${quota.used}/${quota.limit}。` + (weekend ? '周末取消时段消息数限制，请注意分配今天的消息额度。' : '') + (p.sleeping ? weekend ? '现在是睡觉时间，建议休息。' : '现在是睡觉时间，请停止闲聊，该睡觉了；少量额度留给必要沟通。' : weekend ? '' : '请注意分配今天的消息额度。');
 }

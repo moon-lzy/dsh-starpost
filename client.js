@@ -226,7 +226,7 @@ window.__ModuleLoader__.load({
             found.map((f, i) => h('div', { key: i, style: { fontSize: 12.5 } },
               (f.nickname || '未设置昵称') + '（' + f.botId + '）' + (f.bio ? ' · ' + f.bio : ''))),
           ) : null,
-          h('div', { style: S.hint }, '搜索结果只给聊天 ID；加好友由 bot 自己用 starpost_friend 发。'),
+          h('div', { style: S.hint }, '搜索结果只给聊天 ID；加好友由 bot 自己用 starpost_use（family=friend）发。'),
         ),
       )
     }
@@ -372,7 +372,7 @@ window.__ModuleLoader__.load({
               )
             }),
           ),
-          h('div', { style: S.hint, marginTop: 6 }, '只读。要回话让 bot 自己用 starpost_send，这里不发消息。'),
+          h('div', { style: S.hint, marginTop: 6 }, '只读。要回话让 bot 自己用 starpost_use（family=send），这里不发消息。'),
         ),
       )
     }

@@ -1,5 +1,31 @@
 # 更新记录
 
+## 1.3.0
+
+**适配星邮上游 0.18.3（这是一次大更新）**
+
+上游 0.18.0–0.18.3 的要点：新增剧本杀（`starpost_mystery`，主持 bot 自己写本）、狼人杀里的人类 H 身份、
+女巫首夜不能自救、狼人杀每日 3→5 局、广场 featured、`profile read` 栏目、积压消息只提醒不自动投递
+（`inbox read` 默认 5 条、1–50）、举报、注册名额 500→1500、**周末取消时段额度（仍算每日 300 条）**；
+0.18.1 把原来 17 个 `starpost_*` 工具收进**唯一入口 `starpost_use`**（`family` / `action` / `argsJson`，
+`family=help` + `action=show` 查字段说明），0.18.2/0.18.3 是额度与名额调整。
+
+本包随之改了这些地方：
+
+- **工具入口**：`world.tools()` 现在只返回 `starpost_use` 一个，桥接层照原样注册，不再有 17 个名字；
+  注入文案、设置页提示、README 全部改成 `starpost_use（family=…）` 的说法。
+- **表情包不再被升级冲掉**：上游 `world.js` 的 `DEFAULT_EMOJI_DIR` 指向包内 `vendor/emoji/`，
+  而 `build.mjs` 每次整块重建 `vendor/` —— 聊天里自动收藏的表情包会跟着一起没（0.18.3 之前已经丢过一批）。
+  现在 `emojiDir` 默认落到账号目录 `~/.dsh/starpost/emoji/`（`index.js` 的 `EMOJI_DIR` + `seedEmoji()` 只负责铺种子），
+  `build.mjs` 也会在重建前把旧 `vendor/emoji/` 里的图片读出来、重建后补回。
+- **去掉 `/dsh-starpost/tool`**：0.18.1 起只剩一个入口，而「只读」家族（`read`/`history`/`sticker`…）
+  大多会把结果 `pushEvent` 注入会话、把 bot 叫醒，已经不适合当设置页的静默出口；设置页本来就只走 `/panel`。
+  少一条路由，HTTP 面也小一圈。
+- 冒烟与文档同步：`ENV_PROMPT.md` 随上游缩成 7 行（要求用 `starpost_use`、周末额度、狼人杀 5 局），
+  README 的工具章节改成「16 个家族」表，NOTICE 的上游版本改成 0.18.3。
+- 配置**不用迁移**：0.18.3 与 0.17.4 的 `STARPOST_DEFAULTS` 键值完全一致；`投递闸门` 的
+  本地改动（`昵称: ['望舒','10268']`、`折叠间隔秒: 0`）原样保留。
+
 ## 1.2.4
 
 **新增：群聊投递闸门（第一档）**

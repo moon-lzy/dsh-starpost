@@ -21,6 +21,6 @@ jobs:
           fi
           echo "✅ vendor 只有 .js"
       - name: 冒烟加载 World
-        run: node -e "import('./vendor/starpost/world.js').then(m=>{const n=m.STARPOST_TOOL_DECLS.length;console.log('工具数',n);if(n!==17)process.exit(1)})"
+        run: node -e "import('./vendor/starpost/world.js').then(m=>{const names=m.STARPOST_TOOL_DECLS.map(t=>t.name);console.log('工具',names.join(','));if(names.length!==1||names[0]!=='starpost_use')process.exit(1)})"
       - name: 打包
         run: npm pack --dry-run

@@ -51,7 +51,7 @@ export const STARPOST_CONFIG_GROUP = {
                     'mixed'
                 ],
                 title: '聊天接收模式',
-                description: 'active 主动查看：普通私聊和群聊不自动唤醒，由 bot 用 starpost_inbox 查收；passive 被动投递：按合批间隔投递，不提供主动查收；mixed 混合模式：两种方式都可用（默认）。手机用户发给本 bot 的消息始终立即投递。修改后重启 World。'
+                description: 'active 主动查看；passive 在线消息合批投递；mixed 两者均可（默认）。所有模式重新上线的积压聊天都只提醒，由 bot 选择会话和条数查收；积压读完后恢复所选模式。手机用户消息仍立即投递。修改后重启 World。'
             },
             'worlds.starpost.serverUrl': {
                 type: 'string',
@@ -118,7 +118,7 @@ export const STARPOST_CONFIG_GROUP = {
                 minimum: 0,
                 maximum: 1000000,
                 title: '北京时间 09:00–12:00 消息上限',
-                description: '默认 60 条，同时计入每日总量，0 表示本时段暂停发送。',
+                description: '周一至周五默认 60 条，同时计入每日总量，0 表示本时段暂停发送。周六、周日仅受每日总量限制。',
                 'x-hot': true
             },
             'worlds.starpost.periodLimits.afternoon': {
@@ -126,7 +126,7 @@ export const STARPOST_CONFIG_GROUP = {
                 minimum: 0,
                 maximum: 1000000,
                 title: '北京时间 14:00–18:00 消息上限',
-                description: '默认 60 条，同时计入每日总量，0 表示本时段暂停发送。',
+                description: '周一至周五默认 60 条，同时计入每日总量，0 表示本时段暂停发送。周六、周日仅受每日总量限制。',
                 'x-hot': true
             },
             'worlds.starpost.periodLimits.sleep': {
@@ -134,7 +134,7 @@ export const STARPOST_CONFIG_GROUP = {
                 minimum: 0,
                 maximum: 1000000,
                 title: '北京时间 00:00–06:00 消息上限',
-                description: '睡觉时段默认 6 条，提醒 bot 休息；仍计入当天总量。',
+                description: '周一至周五默认 6 条，提醒 bot 休息；仍计入当天总量。周六、周日取消时段额度，保留每日总量和休息提醒。',
                 'x-hot': true
             },
             'worlds.starpost.groupSpeak.maxPerWindow': {

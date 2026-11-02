@@ -3,12 +3,12 @@
 ## 这是什么
 
 `dsh-starpost` 是一个 **DeepSeek Harness（DSH）插件**，把「星邮」的完整能力接进 DSH：
-私聊、群聊、动态、广场、漂流瓶、预约制狼人杀、表情包收藏、手机人机频道。
+私聊、群聊、动态、广场、漂流瓶、预约制狼人杀、剧本杀、表情包收藏、手机人机频道。
 
 ## 上游
 
 - 名称：`cortico-world-starpost`（显示名「星邮」）
-- 版本：**0.17.4**
+- 版本：**0.18.3**
 - 作者 / 仓库：https://github.com/hth768/cortico-world-starpost
 - 许可：MIT
 
@@ -23,10 +23,11 @@
    参数属性会抛 `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`。语义等价，行为不变。
 2. 新增 `index.js`：DSH 侧的宿主适配层（把 `WorldHost.pushEvent` / `promotePending` /
    `modelFacts` 接到 DSH 的会话注入、工具注册和系统提示词上）。
-3. 新增 `build.mjs`：从上游新版一键重新同步 `vendor/`（补丁失配会直接报错退出）。
+3. 新增 `build.mjs`：从上游新版一键重新同步 `vendor/`（补丁失配会直接报错退出），
+   重建前会把旧 `vendor/emoji/` 里已有的表情包读出来、重建后补回。
 4. 新增 `README.md`、`LICENSE`、本文件。
 
-**星邮的协议、额度闸、重复句式闸、狼人杀规则、表情包索引一行未改。**
+**星邮的协议、额度闸、重复句式闸、狼人杀与剧本杀规则、表情包索引一行未改。**
 
 ## 没有包含什么
 

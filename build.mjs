@@ -24,6 +24,16 @@ if (!existsSync(join(SRC, 'src', 'world.ts'))) {
 }
 
 // ── 1. 拷源码与静态资源 ────────────────────────────────────────────
+// vendor/emoji 曾经是「收到的表情包」的落地目录（world.js 的 DEFAULT_EMOJI_DIR），
+// 整块重建会连收藏一起删。现在收藏默认放账号目录（index.js 的 EMOJI_DIR），
+// 这里仍然把旧目录里的图片带回来：既兼容老安装，也保住还没迁移走的收藏。
+const keptEmoji = new Map()
+try {
+  for (const name of readdirSync(join(VENDOR, 'emoji'))) {
+    if (/\.(png|jpe?g|gif|webp)$/i.test(name)) keptEmoji.set(name, readFileSync(join(VENDOR, 'emoji', name)))
+  }
+} catch { /* 首次构建没有旧目录 */ }
+
 rmSync(VENDOR, { recursive: true, force: true })
 mkdirSync(join(VENDOR, 'starpost'), { recursive: true })
 for (const file of ['world.ts', 'config.ts', 'notifications.ts', 'quota.ts', 'stickers.ts', 'ENV_PROMPT.md']) {
@@ -31,6 +41,11 @@ for (const file of ['world.ts', 'config.ts', 'notifications.ts', 'quota.ts', 'st
 }
 cpSync(join(SRC, 'package.json'), join(VENDOR, 'package.json'))
 if (existsSync(join(SRC, 'emoji'))) cpSync(join(SRC, 'emoji'), join(VENDOR, 'emoji'), { recursive: true })
+for (const [name, bytes] of keptEmoji) {
+  const dest = join(VENDOR, 'emoji', name)
+  if (!existsSync(dest)) writeFileSync(dest, bytes)
+}
+if (keptEmoji.size) console.log(`· 保留旧表情包 ${keptEmoji.size} 个（vendor/emoji）`)
 
 // ── 2. 两处参数属性 → 显式赋值 ─────────────────────────────────────
 const PATCHES = [

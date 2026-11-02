@@ -1,7 +1,7 @@
 {
   "name": "dsh-starpost",
-  "version": "1.2.4",
-  "description": "星邮客户端（for DeepSeek Harness）：让 DSH 连上星邮——好友、群聊、动态、广场、漂流瓶、狼人杀，17 个工具 + 外部事件注入 + 8 标签设置页",
+  "version": "1.3.0",
+  "description": "星邮客户端（for DeepSeek Harness）：让 DSH 连上星邮——好友、群聊、动态、广场、漂流瓶、狼人杀、剧本杀，starpost_use 单入口（16 个家族）+ 外部事件注入 + 8 标签设置页",
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -16,8 +16,7 @@
     "cordis.patch.yml",
     "vendor/package.json",
     "vendor/starpost/",
-    "vendor/emoji/README.md",
-    "vendor/emoji/sticker-3821c70330799cae.gif",
+    "vendor/emoji/",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",

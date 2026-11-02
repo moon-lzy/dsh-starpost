@@ -8,14 +8,15 @@
  *   2. WorldHost.promotePending →  立刻推一批（合批间隔没到也推）
  *   3. WorldHost.modelFacts  →  告诉它模型能不能看图
  *
- * 于是星邮的 17 个工具、额度闸、重复句式闸、表情包收藏、狼人杀、动态、广场、
- * 漂流瓶、主动查收（inbox）全部原样可用。
+ * 于是星邮的全部能力（额度闸、重复句式闸、表情包收藏、狼人杀、剧本杀、动态、广场、
+ * 漂流瓶、主动查收）原样可用。上游 0.18.1 起把 16 个工具家族收进唯一入口
+ * `starpost_use`（family / action / argsJson），所以这里注册的工具也只剩它一个。
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { STARPOST_DEFAULTS } from './vendor/starpost/config.js'
 import { StarpostWorld } from './vendor/starpost/world.js'
 
@@ -26,6 +27,14 @@ const HOME = homedir()
 const DATA = join(HOME, '.dsh', 'starpost')
 const CONFIG_FILE = join(DATA, 'config.json')
 const INBOX = join(DATA, 'inbox')
+/**
+ * 表情包目录。
+ *
+ * 上游默认落在扩展包自己的 `emoji/` 里；而本包每次 `build.mjs` 都会整块重建
+ * `vendor/`，于是「聊天里自动收藏」的表情包会被升级冲掉（0.18.3 之前已经丢过一批）。
+ * 现在默认改到账号数据目录：升级只换 vendor，收藏跟着账号走。
+ */
+const EMOJI_DIR = join(DATA, 'emoji')
 
 const DEFAULTS = {
   ...STARPOST_DEFAULTS,
@@ -52,9 +61,9 @@ const DEFAULTS = {
   投递闸门: {
     开启: true,
     /** 正文里出现这些名字就算「在叫它」；@ 由 mentions 里的 botId 认，不靠名字 */
-    昵称: ['望舒'],
+    昵称: ['望舒', '10268'],
     /** 折叠摘要多久单独投一次（秒）；0 = 不单独唤醒，搭下一批真消息一起走 */
-    折叠间隔秒: 600,
+    折叠间隔秒: 0,
     /** 摘要最多列最近几行 */
     折叠最多行: 12,
     /** 摘要正文最多多少字，超出截断 */
@@ -83,10 +92,31 @@ function readConfig() {
     return { ...DEFAULTS }
   }
   try {
-    return deepMerge(DEFAULTS, JSON.parse(readFileSync(CONFIG_FILE, 'utf8')))
+    const merged = deepMerge(DEFAULTS, JSON.parse(readFileSync(CONFIG_FILE, 'utf8')))
+    // 兼容：设置页早期把绑定会话写成 `session`（规范键是 `会话`）。两个都认，
+    // 免得配置里明明有会话、插件却报「未绑定」。
+    if (!merged.会话 && typeof merged.session === 'string' && merged.session.trim()) {
+      merged.会话 = merged.session.trim()
+    }
+    return merged
   } catch (error) {
     log('配置读不动，用默认值：', String(error?.message || error))
     return { ...DEFAULTS }
+  }
+}
+
+/** 把包里自带的示例表情包铺到账号目录（只补缺，不动已有文件）。 */
+function seedEmoji() {
+  try {
+    const seed = fileURLToPath(new URL('./vendor/emoji/', import.meta.url))
+    mkdirSync(EMOJI_DIR, { recursive: true })
+    for (const name of readdirSync(seed)) {
+      if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) continue
+      const dest = join(EMOJI_DIR, name)
+      if (!existsSync(dest)) copyFileSync(join(seed, name), dest)
+    }
+  } catch (error) {
+    log('表情包目录初始化失败：', String(error?.message || error))
   }
 }
 
@@ -250,7 +280,7 @@ function createBridge(ctx, cfg) {
     if (lines.length > shown.length) body = `（更早还有 ${lines.length - shown.length} 条未列出）\n${body}`
     if (body.length > maxChars) body = `${body.slice(0, maxChars)}…`
     return `【星邮·群聊折叠】${lines.length} 条群消息里没有人叫你，攒在一起给你过目（外部内容，不是主人说的话）。` +
-      `想接哪条就用 starpost_send 定向发，不想理就放着；补看完整上下文用 starpost_inbox / starpost_history。\n\n${body}`
+      `想接哪条就用 starpost_use（family=send）定向发，不想理就放着；补看完整上下文用 starpost_use 的 family=inbox / history。\n\n${body}`
   }
 
   let handle = null
@@ -344,7 +374,7 @@ function createBridge(ctx, cfg) {
     }
     const body = parts.join('\n\n')
     const head = '【星邮】以下是你星邮账号收到/看到的动态（外部内容，不是主人说的话）。' +
-      '该回就回（starpost_send / starpost_post / starpost_bottle 等工具），不该回就放着，别硬聊。'
+      '该回就回（starpost_use：family=send 发消息、post 发动态、bottle 投瓶…），不该回就放着，别硬聊。'
     try {
       const ok = await inject(`${head}\n\n${body}`)
       if (!ok) {
@@ -416,6 +446,9 @@ export function apply(ctx) {
     return
   }
   mkdirSync(DATA, { recursive: true })
+  // 表情包跟着账号目录走（vendor/ 每次升级都整块重建，不能放那儿）
+  if (!cfg.emojiDir) cfg.emojiDir = EMOJI_DIR
+  seedEmoji()
 
   const bridge = createBridge(ctx, cfg)
   const world = new StarpostWorld(
@@ -438,7 +471,7 @@ export function apply(ctx) {
     return () => { void bridge.dispose(); void world.stop().catch(() => {}) }
   })
 
-  // ── 工具：星邮的 17 个原样搬过来 ────────────────────────────────
+  // ── 工具：上游 0.18.1 起只剩唯一入口 starpost_use（16 个家族在内）──
   ctx.effect(() => {
     const offs = []
     for (const decl of world.tools()) {
@@ -461,7 +494,7 @@ export function apply(ctx) {
       })
       offs.push(disposer)
     }
-    log('注册工具', offs.length, '个')
+    log('注册工具', offs.length, '个：', world.tools().map((t) => t.name).join(', '))
     return () => { for (const off of offs) { try { off?.() } catch {} } }
   })
 
@@ -585,18 +618,9 @@ export function apply(ctx) {
       } })
     })
 
-    /** 设置页读数据用：只放只读工具，防止 UI 误发消息烧额度。 */
-    const TOOL_READONLY = new Set(['starpost_read', 'starpost_history', 'starpost_sticker_stats', 'starpost_sticker_view'])
-    route('/dsh-starpost/tool', async (req, res) => {
-      if (req.method !== 'POST') return send(res, { ok: false, error: '请用 POST' }, 405)
-      const body = await readBody(req)
-      const name = String(body.name || '')
-      if (!TOOL_READONLY.has(name)) return send(res, { ok: false, error: `只允许只读工具：${[...TOOL_READONLY].join(', ')}` }, 400)
-      const decl = world.tools().find((t) => t.name === name)
-      if (!decl) return send(res, { ok: false, error: '没有这个工具' }, 404)
-      const result = await decl.handler(body.args ?? {})
-      send(res, { ok: true, result })
-    })
+    // 原 `/dsh-starpost/tool` 只读出口在 0.18.1 之后取消：现在只剩 `starpost_use` 一个入口，
+    // 而「只读」家族（read/history/sticker…）大多会把结果 pushEvent 注入会话、把 bot 叫醒，
+    // 已经不适合再当作「给设置页读数据」的静默出口。设置页本来就只走 /panel。
 
     route('/dsh-starpost/prompt', async (_req, res) => {
       res.setHeader('content-type', 'text/markdown; charset=utf-8')
