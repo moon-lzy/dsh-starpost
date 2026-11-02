@@ -166,10 +166,22 @@ function createBridge(ctx, cfg) {
   let flushing = false
   const state = { injected: 0, dropped: 0, folded: 0, foldedBatches: 0, lastInjectAt: 0, lastError: '' }
 
+  /**
+   * 排一次 flush。
+   *
+   * 关键：**更早的安排要能抢占更晚的**。改之前是 `if (timer) return`，于是
+   * 「先来一条群消息排了 120s 批间隔」会把紧接着 promotePending('flush') 要的 200ms
+   * 直接吞掉——手机来消息、主人急着叫醒，却要等两分钟。
+   */
+  let timerAt = 0
   function schedule(delay) {
-    if (timer) return
+    const at = Date.now() + Math.max(0, delay)
+    if (timer && at >= timerAt) return
+    if (timer) clearTimeout(timer)
+    timerAt = at
     timer = setTimeout(() => {
       timer = null
+      timerAt = 0
       void flush()
     }, delay)
     if (typeof timer?.unref === 'function') timer.unref()
@@ -284,6 +296,8 @@ function createBridge(ctx, cfg) {
   }
 
   let handle = null
+  /** handle 是给哪个会话唤醒的；配置里换了会话就得重开，否则消息投进旧会话 */
+  let handleFor = ''
   /**
    * 唤醒会话时必须带上模型。
    *
@@ -315,7 +329,15 @@ function createBridge(ctx, cfg) {
     const found = live()
     if (found && typeof found.followup === 'function') return found
     if (!cfg.自动唤醒) return null
-    if (handle?.agent) return handle.agent
+    if (handle && handleFor === cfg.会话 && handle.agent) return handle.agent
+    if (handle) {
+      // 绑定的会话变了：旧 handle 指向别的会话，丢掉
+      const stale = handle
+      handle = null
+      handleFor = ''
+      void stale.dispose?.().catch?.(() => {})
+      log('绑定的会话换了，丢弃旧唤醒句柄')
+    }
     if (typeof ctx.agents?.resume !== 'function') return null
     const options = resumeOptions()
     if (!options) {
@@ -327,6 +349,7 @@ function createBridge(ctx, cfg) {
     try {
       // 注意：本版 dsh 的 resume 是单参数（ownerCtx 由 registry 内部取）
       handle = await ctx.agents.resume({ resumeSessionId: cfg.会话, ...options })
+      handleFor = cfg.会话
       log('已唤醒会话', cfg.会话, `(${options.agentOptions.provider}/${options.agentOptions.model})`)
       return handle.agent
     } catch (error) {
@@ -441,29 +464,27 @@ function createBridge(ctx, cfg) {
 
 export function apply(ctx) {
   const cfg = readConfig()
-  if (!cfg.enabled) {
-    log('未启用（config.enabled = false）')
-    return
-  }
   mkdirSync(DATA, { recursive: true })
   // 表情包跟着账号目录走（vendor/ 每次升级都整块重建，不能放那儿）
   if (!cfg.emojiDir) cfg.emojiDir = EMOJI_DIR
-  seedEmoji()
+  if (cfg.enabled) seedEmoji()
+  else log('未启用（config.enabled = false）：不注册工具、不开轮询，只挂着设置页路由')
 
   const bridge = createBridge(ctx, cfg)
-  const world = new StarpostWorld(
+  const world = cfg.enabled ? new StarpostWorld(
     cfg,
     DATA,               // botDir
     DATA,               // packageDir（不用）
     DATA,               // dataDir：身份、凭据、游标、表情包索引都在这里
     'Asia/Shanghai',
-    (secretName) => String(process.env[secretName] || ''),  // 凭据优先走 stargpost-credential.json
+    (secretName) => String(process.env[secretName] || ''),  // 凭据优先走 starpost-credential.json
     Date.now,
     () => JSON.parse(readFileSync(new URL('./vendor/package.json', import.meta.url), 'utf8')).version,
-  )
+  ) : null
 
   // ── 起 World（它自己轮询；我们只管把事件送到会话里）────────────────
   ctx.effect(() => {
+    if (!world) return () => { void bridge.dispose() }
     void world.start(bridge.host).then(
       () => log('已启动，轮询间隔', cfg.pollIntervalMs, 'ms'),
       (error) => log('启动失败：', String(error?.message || error)),
@@ -474,6 +495,7 @@ export function apply(ctx) {
   // ── 工具：上游 0.18.1 起只剩唯一入口 starpost_use（16 个家族在内）──
   ctx.effect(() => {
     const offs = []
+    if (!world) return () => {}
     for (const decl of world.tools()) {
       const disposer = ctx.tools.register({
         name: decl.name,
@@ -500,7 +522,7 @@ export function apply(ctx) {
 
   // ── 星邮的能力说明（上游 ENV_PROMPT.md）进系统提示词 ─────────────
   const promptFile = new URL('./vendor/starpost/ENV_PROMPT.md', import.meta.url)
-  if (existsSync(promptFile)) {
+  if (world && existsSync(promptFile)) {
     const prompt = readFileSync(promptFile, 'utf8')
     const register = (target, sid) => {
       try {
@@ -574,18 +596,19 @@ export function apply(ctx) {
         serverUrl: cfg.serverUrl,
         session: cfg.会话,
         cursor,
-        lamps: panelOf().lamps,
+        lamps: world ? panelOf().lamps : [],
         bridge: bridge.state,
         deliveryIntervalMs: cfg.deliveryIntervalMs,
         batchLimit: cfg.单批上限,
         autoWake: cfg.自动唤醒,
         deliveryGate: cfg.投递闸门,
-        tools: world.tools().map((t) => t.name),
+        tools: world ? world.tools().map((t) => t.name) : [],
       })
     })
 
     route('/dsh-starpost/panel', async (req, res) => {
       const body = await readBody(req)
+      if (!world) return send(res, { ok: false, error: '星邮未启用：把 enabled 打开后重启 dsh web 才生效' }, 409)
       const result = await panelOf().invoke(body.panel || 'viewer', body.method, body.args || [])
       // 账号凭据默认打码：这一屏常年开在设置里，不该一直明文摆着。
       // 要看全的，显式再发一次 {reveal:true}（设置页的「显示」按钮就是这么发的）。
