@@ -321,6 +321,27 @@ function createBridge(ctx, cfg) {
     return { agentOptions }
   }
 
+  /**
+   * 唤醒时把会话自己的 agent 预设挂回去。
+   *
+   * `agents.resume()` 不带 `setup` 时，agent-loop 不会挂任何预设：bash / read / grep /
+   * 定时 / 子代理这些宿主工具全缺，系统提示也少掉「工具使用须知」那一段。更麻烦的是
+   * 这个残缺 agent 会一直复用到进程退出，界面上再发消息也还是它——只有重启能救。
+   * 这里照 `dsh-api-session-controller` 的 composeAgent 做同一件事：取会话记着的
+   * `agentPreset`，解析出预设 id，再 mount 到新建的 agent 上。
+   */
+  function presetSetup() {
+    const presets = (() => { try { return ctx.get?.('agentPresets') } catch { return undefined } })()
+    if (!presets || typeof presets.mount !== 'function') return undefined
+    return async (agentCtx, agent) => {
+      const projections = (() => { try { return ctx.get?.('sessionProjections') } catch { return undefined } })()
+      const recorded = projections?.stateOf?.(agent.session, 'agentPreset')
+      const resolved = await presets.resolve(recorded)
+      if (resolved?.id) await presets.mount(agentCtx, resolved.id)
+      return undefined
+    }
+  }
+
   async function ensureAgent() {
     if (!cfg.会话) return null
     const live = () => {
@@ -347,10 +368,12 @@ function createBridge(ctx, cfg) {
       return null
     }
     try {
+      // setup 必须带上：缺了它，唤醒出来的 agent 不挂预设（宿主工具全没）
+      const setup = presetSetup()
       // 注意：本版 dsh 的 resume 是单参数（ownerCtx 由 registry 内部取）
-      handle = await ctx.agents.resume({ resumeSessionId: cfg.会话, ...options })
+      handle = await ctx.agents.resume({ resumeSessionId: cfg.会话, ...options, ...(setup ? { setup } : {}) })
       handleFor = cfg.会话
-      log('已唤醒会话', cfg.会话, `(${options.agentOptions.provider}/${options.agentOptions.model})`)
+      log('已唤醒会话', cfg.会话, `(${options.agentOptions.provider}/${options.agentOptions.model}${setup ? '，含预设' : '，无预设'})`)
       return handle.agent
     } catch (error) {
       state.lastError = `唤醒会话失败：${String(error?.message || error)}`

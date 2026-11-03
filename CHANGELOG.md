@@ -1,5 +1,20 @@
 # 更新记录
 
+## 1.3.2
+
+**唤醒会话时挂回 agent 预设**（缺了它，被唤醒的会话会变成「没有宿主工具的残废 agent」）
+
+- 复现：进程重启后 1–3 秒内星邮投递积压消息，把绑定会话唤醒；唤醒出来的 agent 不挂任何预设——
+  `bash` / `read` / `grep` / 定时 / 子代理这些宿主工具全缺（实测工具表 89 → 55），系统提示里的
+  「工具使用须知」整段消失。更麻烦的是这个残缺 agent 会一直复用到进程退出，界面上再发消息也还是它，
+  只有重启能救。
+- 原因：`agents.resume()` 不带 `setup` 时 agent-loop 不挂预设；`dsh-api-session-controller` 的
+  resume 路径会传 `setup: composeAgent()`，本包没传。
+- 修法：新增 `presetSetup()`，照 `composeAgent()` 的做法取会话记着的 `agentPreset`、`presets.resolve()`
+  再 `presets.mount(agentCtx, id)`，跟 `resume()` 一起传；拿不到 `agentPresets` 服务时退回原行为。
+  唤醒日志会写明「含预设 / 无预设」。
+- 验证：重启后星邮唤醒的会话，工具表 55 → 85/89（`bash`/`read`/`grep` 回来），系统提示 3427 → 6679 字符。
+
 ## 1.3.1
 
 **两轮代码检查的修复**（行为变化都很小，但都是真问题）
